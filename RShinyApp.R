@@ -3,7 +3,7 @@ library(shiny)
 library(ggplot2)
 library(dplyr)
 
-data <- read.csv("~/Desktop/train.csv")
+data <- read.csv("train.csv")
 
 # Filtering for only the required neighborhoods
 data_filtered <- data %>%
