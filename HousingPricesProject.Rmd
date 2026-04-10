@@ -236,4 +236,18 @@ cv_press_4 <- cv_result_4$delta[1] * nrow(train)
 cv_press_4 
 
 plot(model_4)
+
+#Kaggle Score
+test <- read.csv("test.csv")
+test$logGrLivArea <- log(test$GrLivArea)
+score <- predict(model_4, newdata = test)
+preds <- exp(score)
+preds
+
+# Getting the score by submitting to Kaggle
+submission <- data.frame(
+  Id = test$Id,
+  SalePrice = preds
+)
+write.csv(submission, "analysis2_mlr2.csv", row.names = FALSE)
 ```
