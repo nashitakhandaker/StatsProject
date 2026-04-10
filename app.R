@@ -7,7 +7,7 @@ data <- read.csv("train.csv")
 
 # Filtering for only the required neighborhoods
 data_filtered <- data %>%
-  filter(Neighborhood %in% c("Names", "Edwards", "BrkSide"))
+  filter(Neighborhood %in% c("NAmes", "Edwards", "BrkSide"))
 
 # Rshiny application
 ui <- fluidPage(
@@ -17,7 +17,7 @@ ui <- fluidPage(
     sidebarPanel(
       selectInput("neighborhood",
                   "Select Neighborhood:",
-                  choices = c("All", "Names", "Edwards", "BrkSide"),
+                  choices = c("All", "NAmes", "Edwards", "BrkSide"),
                   selected = "All")
     ),
     
@@ -54,4 +54,5 @@ server <- function(input, output) {
 
 # Launch
 shinyApp(ui = ui, server = server)
+
 
