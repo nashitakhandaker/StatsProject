@@ -21,7 +21,7 @@ clean_slr <- na.omit(data[, c("logSalePrice", "logGrLivArea")])
 
 # Fitting the SLR (LM for summary + Adjusted R^2)
 model_slr_lm <- lm(logSalePrice ~ logGrLivArea, data = clean_slr)
-summary(model_slr_lm)   # <-- Adjusted R^2 here
+summary(model_slr_lm)   
 AIC(model_slr_lm)
 
 # Checking SLR model assumptions
@@ -105,7 +105,7 @@ cv_result_mlr1$delta
 cv_press_mlr1 <- cv_result_mlr1$delta[1] * nrow(clean_mlr1)
 cv_press_mlr1
 
-# MLR 1 Kaggle score (convert BACK from log)
+# MLR 1 Kaggle score 
 pred_log_mlr1 <- predict(model_mlr1_lm, newdata = test)
 predictions_mlr1 <- exp(pred_log_mlr1)
 
