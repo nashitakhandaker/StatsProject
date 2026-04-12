@@ -1,0 +1,146 @@
+---
+title: "Housing Data Stats Project"
+author: "Avery John"
+date: "2026-04-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Executive Summary
+```{r}
+#Our project is split up into two analyses. In the first analysis, we examined housing data in the North Ames, Edwards and Burkside neighborhoods in Ames, Iowa. Our goal was to analyze the relationship between sales price and square footage of the living area of the house and whether that depends on which neighborhood the house is located in.
+```
+
+#Import Libraries
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(car)
+library(Metrics)
+library(boot)
+library(scales)
+```
+
+#Load the Data
+```{r}
+train <- read.csv("train.csv")
+test <- read.csv("test.csv")
+```
+
+# Exploring the Data
+```{r}
+dim(train)
+dim(test)
+
+names(train)
+names(test)
+
+colSums(is.na(train))
+colSums(is.na(test))
+
+#These datasets feature various columns with NA or null values. Depending on which variables we choose to explore in analysis 2, we may need to further investigate these values.
+
+#The document mentions that the realtors prefer talking about living area in increments of 100 square feet, so I created variables to divide the GrLivArea by 100
+train$GrLivArea_100 <- train$GrLivArea / 100
+test$GrLivArea_100 <- test$GrLivArea / 100
+```
+
+# Analysis 1
+```{r}
+#I filtered the data to only focus on the three neighborhoods that Century 21 Ames works with
+train_1 <- train %>% filter(Neighborhood == "NAmes" | Neighborhood == "Edwards" | Neighborhood == "BrkSide") %>%
+  mutate(Neighborhood = dplyr::recode(Neighborhood,
+                               'NAmes' = 'North Ames',
+                               'Edwards' = 'Edwards',
+                               'BrkSide' = 'Brookside'))
+
+test_1 <- test %>% filter(Neighborhood == "NAmes" | Neighborhood == "Edwards" | Neighborhood == "BrkSide") %>%
+  mutate(Neighborhood = dplyr::recode(Neighborhood,
+                               'NAmes' = 'North Ames',
+                               'Edwards' = 'Edwards',
+                               'BrkSide' = 'Brookside'))
+
+dim(train_1)
+dim(test_1)
+train_1$Neighborhood <- factor(train_1$Neighborhood)
+
+ggplot(train_1, aes(x = GrLivArea_100, y = SalePrice, color = Neighborhood)) +
+  geom_point()
+
+model_1 <- lm(SalePrice ~ GrLivArea_100 * Neighborhood, data = train_1)
+summary(model_1)
+
+par(mfrow=c(2,2))
+plot(model_1) #Looking at the residuals plot, there appears to be signs of heteroscedasticity. The QQ plot shows signs of heavy tails, which makes this model sensitive to extreme outliers. Also, the standardized residuals plot shows slight curvature, so the linearity assumption is mildly violated. Lastly, with the leverage plot, we can see observation 339 is classified as an influential point with high leverage, as it falls below the threshold of Cook's Distance. Overall, this model doesn't satisfy the assumptions of linear regression, so a log transformation may be helpful in improving linearity and constant variance.
+
+
+#Log Transformation: Transform the variables SalePrice and GrLivArea_100 to the logged version to determine if this will satisfy the assumptions better
+train_1$logSalePrice = log(train_1$SalePrice)
+train_1$logGrLivArea_100 = log(train_1$GrLivArea_100)
+
+#Regression model with log variables (log-log model)
+model_1_log <- lm(logSalePrice ~ logGrLivArea_100 * Neighborhood, data = train_1)
+summary(model_1_log)
+confint(model_1_log, level = 0.95)
+
+plot(model_1_log) #Residuals seem more randomly scattered. There's less curvature at the end of the line of the QQ plot, so the model isn't as sensitive to influential points. The standardized residuals plot still shows some mild heteroscedasticity even after a log transformation. We still see some influential points in the leverage plot, but no points fall below the threshold of Cook's Distance.
+
+vif(model_1_log, type = 'predictor') #Predictors are not redundant
+AIC(model_1_log) #-168.1383
+mae_value_log <- mean(abs(residuals(model_1_log)))
+print(mae_value_log) #0.1443
+predict <- predict(model_1_log, newdata = train_1)
+rmse <- sqrt(mean((train_1$logSalePrice - predict)^2))
+rmse #0.1908
+
+#Identifying influential points: 339 and 190 appear to still be influential points
+train_1[c(190, 339, 131), ]
+
+#339 seems to be a large house with a relatively low sales price. According to the data, it is a new house (SaleType) and has Partial sales condition.
+
+#Partial indicates that this house is not fully on the market for unknown reasons. New indicates that this house is newly built
+
+#Right now, this model is being trained on larger house = higher price, but this observation is not matching with what this model is learning. It contradicts with the main trend and therefore has high leverage.
+
+#Constructing the same log-log model but removing observation 339
+train_no339 <- train_1[-339, ]
+final_model <- lm(logSalePrice ~ logGrLivArea_100 * Neighborhood, data = train_no339)
+summary(final_model) #Less residual standard error than log model, slightly higher adjusted r-squared, all variables are statistically significant
+
+confint(final_model, level = 0.95)
+
+plot(final_model) #The residuals plot shows improvement in linearity, as the red line appears flatter after the log transformation and removal of 339. The QQ plot shows that the residuals are approximately normally distributed, with slight deviations at the tails, which is acceptable in terms of regression inference. The Scale-Location plot still shows the variance increasing, but the pattern doesn't appear as severe and the model is still appropriate for the analysis. Lastly, the leverage plot identified a few remaining influential points after removing point 339, but these points don't distort the fit of the model as much as observation 339 did.
+
+vif(final_model, type = "predictor") #No multicollinearity
+AIC(final_model) #-175.8373
+mae_value_final <- mean(abs(residuals(final_model)))
+print(mae_value_final) #0.1440
+predict <- predict(final_model, newdata = train_no339)
+rmse <- sqrt(mean((train_no339$logSalePrice - predict)^2))
+rmse #0.1887
+
+#The model without observation 339 is a better statistical fit for assessing the relationship between sales price and the square footage of the living area in a house based on the neighborhoods that Century 21 Ames works with. This is due to the AIC being lower at -175.84 than the AIC of the model including 339, which was -168.14. 
+
+#To further compare the models' performances and predictive powers, the next step is to use 10-fold cross validation to compute a CV RMSE
+
+#Full Log-Log model
+log_form <- logSalePrice ~ logGrLivArea_100 * Neighborhood
+cv_error <- cv.glm(train_1, glm(log_form, data = train_1), K = 10)
+cv_error$delta #0.03805353 = CV MSE
+sqrt(0.03805353) #0.195 = CV RMSE
+#Convert to Percent
+exp(0.195) - 1 #21.5% = The full log-log model's expected prediction error is about 21.5% of the actual home price
+
+#Log-Log Model without 339
+cv_error_no339 <- cv.glm(train_no339, glm(log_form, data = train_no339), K = 10)
+cv_error_no339$delta #0.03749430 = CV MSE
+sqrt(0.03749430) #0.194 = CV RMSE
+#Convert to Percent
+exp(0.194) - 1 #21.4% = The log-log model without the influential point of observation 339's expected prediction error is about 21.1% of the actual home price
+
+#The reduced log-log model that removed the influential point of observation 339 achieved a slightly lower CV RMSE compared to the full log-log model's CV RMSE. This corresponds with a marginal improvement in the expected prediction error of the model. Given the consistency across MAE, AIC and CV RMSE, the log-log model without observation 339 (model_1_no339) was selected as the final model due to its improved generalization performance and reduced sensitivity to influential points.
+```
